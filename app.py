@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -56,7 +55,7 @@ st.markdown("""
 st.title("🛡️ Hybrid PFOS Mobile")
 st.markdown("*Your mobile command center for dynamic mortgage elimination & wealth acceleration.*")
 
-# --- SIDEBAR: MASTER INPUTS & ADVANCED SCENARIOS ---
+# --- SIDEBAR: MASTER INPUTS & MODULAR SCENARIOS ---
 with st.sidebar:
     st.header("⚙️ Master Inputs")
     baseline_date = datetime(2026, 9, 30)
@@ -67,17 +66,21 @@ with st.sidebar:
     bonus = st.number_input("Annual March Bonus (₹)", value=200000, step=10000)
 
     st.divider()
-    st.header("📈 Career & EPF Step-Hike")
+    st.header("📈 Annual Career Hikes & EPF")
     epf_start = st.number_input("EPF Opening Balance (₹)", value=471347, step=5000)  
     epf_inflow_base = st.number_input("Initial EPF Monthly Inflow (₹)", value=17232, step=500)
-    hike_month = st.number_input("Hike Effective Month Number", value=12, step=1, help="Month when your salary/EPF increases")
-    epf_inflow_new = st.number_input("New EPF Monthly Inflow Post-Hike (₹)", value=25000, step=500)
+    first_hike_month = st.number_input("First Hike Month Number", value=12, step=1, help="Month when your first annual hike applies")
+    annual_hike_pct = st.number_input("Annual EPF Hike Rate (%)", value=10.0, step=0.5, help="Percentage increase applied every 12 months from first hike") / 100.0
     epf_rate = st.number_input("EPF Interest Rate (%)", value=8.25, step=0.25) / 100.0
 
     st.divider()
-    st.header("🎁 Custom Windfall Injection")
-    windfall_amt = st.number_input("Windfall Amount (₹)", value=0, step=10000)
-    windfall_month = st.number_input("Windfall Arriving Month Number", value=18, step=1)
+    st.header("🎁 Sporadic Windfalls")
+    st.markdown("Direct loan paydowns from family/support:")
+    wf1_amt = st.number_input("Windfall 1 Amount (₹)", value=0, step=10000)
+    wf1_m = st.number_input("Windfall 1 Month Number", value=18, step=1)
+    
+    wf2_amt = st.number_input("Windfall 2 Amount (₹)", value=0, step=10000)
+    wf2_m = st.number_input("Windfall 2 Month Number", value=30, step=1)
 
     st.divider()
     st.header("📊 Portfolio & Tax")
@@ -85,8 +88,8 @@ with st.sidebar:
     mf_cagr = st.number_input("MF Planning CAGR (%)", value=13.0, step=0.5) / 100.0
     ltcg_limit = st.number_input("Annual LTCG Exemption (₹)", value=125000, step=5000)
 
-# --- DYNAMIC RECONCILED SIMULATION ENGINE ---
-def run_dynamic_simulation(loan_p, r_loan, monthly_emi, annual_bonus, epf_b, epf_base, epf_hike_m, epf_new, r_epf, sip_pre, r_mf, wf_amt, wf_m, base_dt):
+# --- ADVANCED MODULAR SIMULATION ENGINE ---
+def run_modular_simulation(loan_p, r_loan, monthly_emi, annual_bonus, epf_b, epf_base, hike_m, hike_rate, r_epf, sip_pre, r_mf, wf1_a, wf1_mo, wf2_a, wf2_mo, base_dt):
     months = 120
     loan_r = r_loan / 12.0
     epf_r = r_epf / 12.0
@@ -99,7 +102,14 @@ def run_dynamic_simulation(loan_p, r_loan, monthly_emi, annual_bonus, epf_b, epf
     
     for m in range(1, months + 1):
         curr_dt = base_dt + relativedelta(months=m)
-        current_epf_inflow = epf_base if m < epf_hike_m else epf_new
+        
+        # Calculate dynamic EPF inflow with compound annual hikes
+        if m < hike_m:
+            current_epf_inflow = epf_base
+        else:
+            # Number of annual hike cycles completed
+            years_elapsed = (m - hike_m) // 12
+            current_epf_inflow = epf_base * ((1 + hike_rate) ** (years_elapsed + 1))
         
         epf = epf * (1 + epf_r) + current_epf_inflow
         for lot in mf_lots:
@@ -120,10 +130,16 @@ def run_dynamic_simulation(loan_p, r_loan, monthly_emi, annual_bonus, epf_b, epf
         windfall_applied = 0.0
         realized_gain_period = 0.0
         
-        if m == wf_m and loan > 0 and wf_amt > 0:
-            windfall_applied = min(wf_amt, loan)
+        # Check sporadic windfalls in this month
+        if m == wf1_mo and loan > 0 and wf1_a > 0:
+            windfall_applied += min(wf1_a, loan)
             loan -= windfall_applied
+        if m == wf2_mo and loan > 0 and wf2_a > 0:
+            wf2_applied = min(wf2_a, loan)
+            windfall_applied += wf2_applied
+            loan -= wf2_applied
             
+        # March Prepayment Events (Months 6, 18, 30, 42)
         if m in [6, 18, 30, 42] and loan > 0:
             bonus_paid = min(annual_bonus, loan)
             loan -= bonus_paid
@@ -177,10 +193,10 @@ def run_dynamic_simulation(loan_p, r_loan, monthly_emi, annual_bonus, epf_b, epf
         
     return pd.DataFrame(log)
 
-df_sim = run_dynamic_simulation(
+df_sim = run_modular_simulation(
     loan_start, loan_rate, emi, bonus, epf_start, 
-    epf_inflow_base, hike_month, epf_inflow_new, epf_rate, 
-    mf_sip_pre, mf_cagr, windfall_amt, windfall_month, baseline_date
+    epf_inflow_base, first_hike_month, annual_hike_pct, epf_rate, 
+    mf_sip_pre, mf_cagr, wf1_amt, wf1_m, wf2_amt, wf2_m, baseline_date
 )
 
 # --- FULLY DYNAMIC DEBT-FREE CALCULATIONS ---
@@ -212,10 +228,12 @@ st.subheader("📊 Asset vs. Debt Burn")
 chart_data = df_sim.set_index('Month')[['Loan', 'MF', 'EPF']]
 st.line_chart(chart_data, height=220)
 
-# --- DYNAMIC MARCH & EVENT SCHEDULE TABLE ---
+# --- DYNAMIC SCHEDULE & EVENT TABLE ---
 st.subheader("🗓️ Execution Schedule & Calendar")
 event_rows = df_sim[(df_sim['Month'].isin([6, 18, 30, 42])) | (df_sim['Windfall'] > 0)][['Calendar Date', 'Month', 'Loan', 'Bonus', 'Windfall', 'EPF_Harvest', 'MF_Harvest']]
 event_rows.columns = ['Date', 'M', 'Loan Left', 'Bonus', 'Windfall', 'EPF Harvest', 'MF Sale']
 st.dataframe(event_rows.style.format("{:,.0f}", subset=['Loan Left', 'Bonus', 'Windfall', 'EPF Harvest', 'MF Sale']), use_container_width=True)
 
-st.success("✅ Fully dynamic payoff date tracking & explicit calendar month labeling enabled.")
+st.success("✅ Upgraded with compound annual career hikes and modular sporadic windfalls.")
+
+
