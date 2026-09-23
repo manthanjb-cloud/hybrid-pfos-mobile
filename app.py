@@ -1,27 +1,27 @@
+
 import streamlit as st
 import pandas as pd
 import numpy as np
+from datetime import datetime
+from dateutil.relativedelta import relativedelta
 
 # Page Configuration for Mobile-First View
 st.set_page_config(
     page_title="Hybrid PFOS Mobile",
     page_icon="🛡️",
     layout="centered",
-    initial_sidebar_state="collapsed"  # Collapsed by default so mobile users see dashboard first
+    initial_sidebar_state="collapsed"
 )
 
 # --- MOBILE-FIRST CSS STYLING ---
 st.markdown("""
 <style>
-    /* Remove default Streamlit top padding & margins for mobile */
     .block-container {
         padding-top: 1.5rem;
         padding-bottom: 2rem;
         padding-left: 1rem;
         padding-right: 1rem;
     }
-    
-    /* Style metric cards for a native look */
     div[data-testid="stMetric"] {
         background-color: #f8f9fa;
         border: 1px solid #e9ecef;
@@ -30,19 +30,15 @@ st.markdown("""
         box-shadow: 0 2px 4px rgba(0,0,0,0.02);
         margin-bottom: 10px;
     }
-    
     div[data-testid="stMetric"] label {
         font-size: 13px !important;
         color: #6c757d !important;
     }
-    
     div[data-testid="stMetric"] div[data-testid="stMetricValue"] {
         font-size: 20px !important;
         font-weight: 700 !important;
         color: #1b365d !important;
     }
-    
-    /* Headings */
     h1 {
         font-size: 24px !important;
         font-weight: 800 !important;
@@ -54,37 +50,43 @@ st.markdown("""
         color: #1b365d;
         margin-top: 1rem;
     }
-    
-    /* Sidebar styling */
-    .css-1d391kg {
-        background-color: #f1f3f5;
-    }
 </style>
 """, unsafe_allow_html=True)
 
 st.title("🛡️ Hybrid PFOS Mobile")
-st.markdown("*Your mobile command center for the 42-month mortgage elimination strategy.*")
+st.markdown("*Your mobile command center for dynamic mortgage elimination & wealth acceleration.*")
 
-# --- SIDEBAR: MASTER INPUTS & MODULARITY ---
+# --- SIDEBAR: MASTER INPUTS & ADVANCED SCENARIOS ---
 with st.sidebar:
     st.header("⚙️ Master Inputs")
-    st.markdown("Modify inputs for career or rate changes.")
-
+    baseline_date = datetime(2026, 9, 30)
+    
     loan_start = st.number_input("Starting HDFC Principal (₹)", value=3457730, step=10000)
     loan_rate = st.number_input("Home Loan Interest Rate (%)", value=7.10, step=0.05) / 100.0  
     emi = st.number_input("Monthly EMI (₹)", value=31354, step=500)
     bonus = st.number_input("Annual March Bonus (₹)", value=200000, step=10000)
 
+    st.divider()
+    st.header("📈 Career & EPF Step-Hike")
     epf_start = st.number_input("EPF Opening Balance (₹)", value=471347, step=5000)  
-    epf_inflow = st.number_input("EPF Monthly Inflow (₹) [MODURAL]", value=17232, step=500)
+    epf_inflow_base = st.number_input("Initial EPF Monthly Inflow (₹)", value=17232, step=500)
+    hike_month = st.number_input("Hike Effective Month Number", value=12, step=1, help="Month when your salary/EPF increases")
+    epf_inflow_new = st.number_input("New EPF Monthly Inflow Post-Hike (₹)", value=25000, step=500)
     epf_rate = st.number_input("EPF Interest Rate (%)", value=8.25, step=0.25) / 100.0
 
+    st.divider()
+    st.header("🎁 Custom Windfall Injection")
+    windfall_amt = st.number_input("Windfall Amount (₹)", value=0, step=10000)
+    windfall_month = st.number_input("Windfall Arriving Month Number", value=18, step=1)
+
+    st.divider()
+    st.header("📊 Portfolio & Tax")
     mf_sip_pre = st.number_input("Monthly MF SIP (₹)", value=70000, step=5000)
     mf_cagr = st.number_input("MF Planning CAGR (%)", value=13.0, step=0.5) / 100.0
     ltcg_limit = st.number_input("Annual LTCG Exemption (₹)", value=125000, step=5000)
 
-# --- RECONCILED SIMULATION ENGINE ---
-def run_reconciled_simulation(loan_p, r_loan, monthly_emi, annual_bonus, epf_b, epf_monthly, r_epf, sip_pre, r_mf):
+# --- DYNAMIC RECONCILED SIMULATION ENGINE ---
+def run_dynamic_simulation(loan_p, r_loan, monthly_emi, annual_bonus, epf_b, epf_base, epf_hike_m, epf_new, r_epf, sip_pre, r_mf, wf_amt, wf_m, base_dt):
     months = 120
     loan_r = r_loan / 12.0
     epf_r = r_epf / 12.0
@@ -93,11 +95,13 @@ def run_reconciled_simulation(loan_p, r_loan, monthly_emi, annual_bonus, epf_b, 
     mf_lots = []
     epf = epf_b
     loan = loan_p
-    
     log = []
     
     for m in range(1, months + 1):
-        epf = epf * (1 + epf_r) + epf_monthly
+        curr_dt = base_dt + relativedelta(months=m)
+        current_epf_inflow = epf_base if m < epf_hike_m else epf_new
+        
+        epf = epf * (1 + epf_r) + current_epf_inflow
         for lot in mf_lots:
             lot['v'] *= (1 + mf_r)
             
@@ -113,8 +117,13 @@ def run_reconciled_simulation(loan_p, r_loan, monthly_emi, annual_bonus, epf_b, 
         bonus_paid = 0.0
         epf_h = 0.0
         mf_h = 0.0
+        windfall_applied = 0.0
         realized_gain_period = 0.0
         
+        if m == wf_m and loan > 0 and wf_amt > 0:
+            windfall_applied = min(wf_amt, loan)
+            loan -= windfall_applied
+            
         if m in [6, 18, 30, 42] and loan > 0:
             bonus_paid = min(annual_bonus, loan)
             loan -= bonus_paid
@@ -154,6 +163,7 @@ def run_reconciled_simulation(loan_p, r_loan, monthly_emi, annual_bonus, epf_b, 
         
         log.append({
             'Month': m,
+            'Calendar Date': curr_dt.strftime('%b %Y'),
             'Loan': loan,
             'EPF': epf,
             'MF': mf_val,
@@ -161,20 +171,31 @@ def run_reconciled_simulation(loan_p, r_loan, monthly_emi, annual_bonus, epf_b, 
             'EPF_Harvest': epf_h,
             'MF_Harvest': mf_h,
             'Bonus': bonus_paid,
+            'Windfall': windfall_applied,
             'Realized_LTCG': realized_gain_period
         })
         
     return pd.DataFrame(log)
 
-df_sim = run_reconciled_simulation(loan_start, loan_rate, emi, bonus, epf_start, epf_inflow, epf_rate, mf_sip_pre, mf_cagr)
+df_sim = run_dynamic_simulation(
+    loan_start, loan_rate, emi, bonus, epf_start, 
+    epf_inflow_base, hike_month, epf_inflow_new, epf_rate, 
+    mf_sip_pre, mf_cagr, windfall_amt, windfall_month, baseline_date
+)
 
-# --- MOBILE DASHBOARD METRICS (2x2 Grid) ---
-debt_free_row = df_sim[df_sim['Loan'] == 0]
-debt_free_month = int(debt_free_row['Month'].min()) if not debt_free_row.empty else 42
+# --- FULLY DYNAMIC DEBT-FREE CALCULATIONS ---
+debt_free_rows = df_sim[df_sim['Loan'] == 0]
+if not debt_free_rows.empty:
+    debt_free_row = debt_free_rows.iloc[0]
+    debt_free_m = int(debt_free_row['Month'])
+    debt_free_date_str = f"M {debt_free_m} ({debt_free_row['Calendar Date']})"
+else:
+    debt_free_date_str = "Beyond 10 Yrs"
 
+# --- MOBILE DASHBOARD METRICS ---
 col1, col2 = st.columns(2)
 with col1:
-    st.metric("Debt-Free Date", f"M {debt_free_month} (Mar '30)")
+    st.metric("Debt-Free Target", debt_free_date_str)
 with col2:
     st.metric("Opening EPF", f"₹ {epf_start:,.0f}")
 
@@ -191,12 +212,10 @@ st.subheader("📊 Asset vs. Debt Burn")
 chart_data = df_sim.set_index('Month')[['Loan', 'MF', 'EPF']]
 st.line_chart(chart_data, height=220)
 
-# --- MARCH EXECUTION SCHEDULE ---
-st.subheader("🗓️ March Execution Windows")
-event_rows = df_sim[df_sim['Month'].isin([6, 18, 30, 42])][['Month', 'Loan', 'Bonus', 'EPF_Harvest', 'MF_Harvest']]
-event_rows.columns = ['M', 'Loan Left', 'Bonus', 'EPF Harvest', 'MF Sale']
+# --- DYNAMIC MARCH & EVENT SCHEDULE TABLE ---
+st.subheader("🗓️ Execution Schedule & Calendar")
+event_rows = df_sim[(df_sim['Month'].isin([6, 18, 30, 42])) | (df_sim['Windfall'] > 0)][['Calendar Date', 'Month', 'Loan', 'Bonus', 'Windfall', 'EPF_Harvest', 'MF_Harvest']]
+event_rows.columns = ['Date', 'M', 'Loan Left', 'Bonus', 'Windfall', 'EPF Harvest', 'MF Sale']
+st.dataframe(event_rows.style.format("{:,.0f}", subset=['Loan Left', 'Bonus', 'Windfall', 'EPF Harvest', 'MF Sale']), use_container_width=True)
 
-# Display as clean mobile cards or scrollable table
-st.dataframe(event_rows.style.format("{:,.0f}"), use_container_width=True)
-
-st.caption("📱 Tip: Open this app in your mobile browser and select **'Add to Home Screen'** to use it like a native app.")
+st.success("✅ Fully dynamic payoff date tracking & explicit calendar month labeling enabled.")
