@@ -393,7 +393,8 @@ with st.sidebar:
     st.divider()
     st.header("📅 Hybrid Harvest")
     first_mf_harvest_date = st.date_input("First MF/EPF Harvest", value=date(2027, 3, 30))
-    harvest_interval = st.selectbox("Harvest Frequency", options=[3, 6, 12], index=2, format_func=lambda x: f"Every {x} months")
+    # SET TO 6 MONTHS AS DEFAULT (index=1)
+    harvest_interval = st.selectbox("Harvest Frequency", options=[3, 6, 12], index=1, format_func=lambda x: f"Every {x} months")
 
     st.divider()
     st.header("📊 Rate Stress")
