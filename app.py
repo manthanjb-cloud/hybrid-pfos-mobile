@@ -18,7 +18,7 @@ st.set_page_config(
 
 
 # ============================================================
-# MOBILE-FIRST CSS
+# MOBILE-FIRST CSS (THEME-AWARE & VISIBLE)
 # ============================================================
 
 st.markdown(
@@ -29,24 +29,6 @@ st.markdown(
             padding-bottom: 2rem;
             padding-left: 0.8rem;
             padding-right: 0.8rem;
-        }
-
-        div[data-testid="stMetric"] {
-            background-color: #f8f9fa;
-            border: 1px solid #e9ecef;
-            padding: 10px 12px;
-            border-radius: 12px;
-            margin-bottom: 8px;
-        }
-
-        div[data-testid="stMetric"] label {
-            font-size: 12px !important;
-            color: #6c757d !important;
-        }
-
-        div[data-testid="stMetricValue"] {
-            font-size: 19px !important;
-            font-weight: 700 !important;
         }
 
         h1 {
@@ -445,36 +427,12 @@ df_base, debt_free_base = run_pfos_simulation(
     extra_initial_prepayment=extra_initial_prepayment
 )
 
-df_stress, debt_free_stress = run_pfos_simulation(
-    start_date=start_date,
-    loan_start=loan_start,
-    loan_rate=loan_rate,
-    emi=emi,
-    annual_bonus=annual_bonus,
-    target_date=target_date,
-    mf_sip=mf_sip,
-    mf_return=mf_return,
-    opening_mf=opening_mf,
-    epf_start=epf_start,
-    epf_monthly_inflow=epf_monthly_inflow,
-    epf_hike_pct=epf_hike_pct,
-    epf_interest_rate=epf_interest_rate,
-    epf_harvest_pct=epf_harvest_pct,
-    ltcg_limit=ltcg_limit,
-    first_mf_harvest_date=first_mf_harvest_date,
-    mf_harvest_interval_months=harvest_interval,
-    stress_rate=stress_rate,
-    stress_date=stress_date,
-    max_months=horizon_months,
-    extra_initial_prepayment=extra_initial_prepayment
-)
-
 
 # ============================================================
 # TARGET SNAPSHOT
 # ============================================================
 
-target_rows = df_base[df_base["Date"] >= target_date]
+target_rows = df_base[df_base["Date"] >= pd.Timestamp(target_date)]
 target_row = target_rows.iloc[0] if not target_rows.empty else df_base.iloc[-1]
 
 target_loan = float(target_row["Loan"])
@@ -508,6 +466,22 @@ c4.metric("Target Date", fmt_date(target_date))
 c5, c6 = st.columns(2)
 c5.metric("Target MF", money(target_mf))
 c6.metric("Target EPF", money(target_epf))
+
+# ============================================================
+# ASSET VS DEBT CHART (RESTORED)
+# ============================================================
+
+st.divider()
+st.subheader("🔥 Asset vs Debt Burn")
+
+chart_data = df_base.set_index("Date")[
+    ["Loan", "MF", "EPF"]
+]
+
+st.line_chart(
+    chart_data,
+    height=280
+)
 
 st.divider()
 st.subheader("🗓️ Execution Schedule")
