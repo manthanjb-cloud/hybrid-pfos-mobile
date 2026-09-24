@@ -287,25 +287,31 @@ def run_pfos_simulation(
             bonus_paid = min(annual_bonus, loan)
             loan -= bonus_paid
 
-        mf_harvest = 0.0
-        realized_ltcg = 0.0
         is_harvest_date = any(
             current_date.year == hd.year and current_date.month == hd.month
             for hd in harvest_dates
         )
 
-        if is_harvest_date and current_date >= first_mf_harvest_date and loan > 0:
-            mf_lots, mf_harvest, realized_ltcg, fy_ltcg_used = harvest_mf_tax_efficient(
-                mf_lots, current_date, loan, ltcg_limit, fy_ltcg_used
-            )
-            loan -= mf_harvest
-
+        # ----------------------------------------------------
+        # EPF HYBRID HARVEST (PRIORITY 1)
+        # ----------------------------------------------------
         epf_harvest = 0.0
         if is_harvest_date and current_date >= first_mf_harvest_date and loan > 0 and epf_harvest_pct > 0:
             available_epf = epf * epf_harvest_pct
             epf_harvest = min(available_epf, loan)
             epf -= epf_harvest
             loan -= epf_harvest
+
+        # ----------------------------------------------------
+        # MF HARVEST EVENT (PRIORITY 2)
+        # ----------------------------------------------------
+        mf_harvest = 0.0
+        realized_ltcg = 0.0
+        if is_harvest_date and current_date >= first_mf_harvest_date and loan > 0:
+            mf_lots, mf_harvest, realized_ltcg, fy_ltcg_used = harvest_mf_tax_efficient(
+                mf_lots, current_date, loan, ltcg_limit, fy_ltcg_used
+            )
+            loan -= mf_harvest
 
         loan = max(0.0, loan)
         epf = max(0.0, epf)
@@ -386,8 +392,8 @@ with st.sidebar:
 
     st.divider()
     st.header("📅 Hybrid Harvest")
-    first_mf_harvest_date = st.date_input("First MF/EPF Harvest", value=date(2027, 8, 31))
-    harvest_interval = st.selectbox("Harvest Frequency", options=[3, 6, 12], index=1, format_func=lambda x: f"Every {x} months")
+    first_mf_harvest_date = st.date_input("First MF/EPF Harvest", value=date(2027, 3, 30))
+    harvest_interval = st.selectbox("Harvest Frequency", options=[3, 6, 12], index=2, format_func=lambda x: f"Every {x} months")
 
     st.divider()
     st.header("📊 Rate Stress")
