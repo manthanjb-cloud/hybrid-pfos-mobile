@@ -18,7 +18,7 @@ st.set_page_config(
 
 
 # ============================================================
-# MOBILE-FIRST CSS (THEME-AWARE & VISIBLE)
+# MOBILE-FIRST CSS
 # ============================================================
 
 st.markdown(
@@ -320,7 +320,7 @@ def run_pfos_simulation(
         rows.append(
             {
                 "Month": month_number,
-                "Date": current_date,
+                "Date": pd.to_datetime(current_date),
                 "Calendar Date": current_date.strftime("%b %Y"),
                 "FY": this_fy,
                 "Rate": rate_used,
