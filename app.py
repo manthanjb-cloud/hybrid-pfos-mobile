@@ -386,7 +386,7 @@ with st.sidebar:
 
     st.divider()
     st.header("🇮🇳 NPS Engine (75E/25C)")
-    nps_start = st.number_input("Opening NPS Balance (₹)", min_value=0, value=0, step=10000)
+    nps_start = st.number_input("Opening NPS Balance (₹)", min_value=0, value=232244, step=10000)
     nps_return_pct = st.number_input("Planning NPS CAGR (%)", min_value=-50.0, max_value=100.0, value=11.0, step=0.5)
     nps_return = nps_return_pct / 100.0
 
