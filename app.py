@@ -55,7 +55,7 @@ st.markdown(
 
 st.title("🛡️ Hybrid PFOS Mobile")
 st.caption(
-    "Mortgage elimination + MF wealth engine + EPF hybrid reserve"
+    "Mortgage elimination + MF wealth engine + EPF hybrid reserve + NPS"
 )
 
 
@@ -216,6 +216,8 @@ def run_pfos_simulation(
     epf_hike_pct,
     epf_interest_rate,
     epf_harvest_pct,
+    nps_start,
+    nps_return,
     ltcg_limit,
     first_mf_harvest_date,
     mf_harvest_interval_months,
@@ -226,6 +228,7 @@ def run_pfos_simulation(
 ):
     loan = float(loan_start)
     epf = float(epf_start)
+    nps = float(nps_start)
     mf_lots = []
 
     if opening_mf > 0:
@@ -233,6 +236,7 @@ def run_pfos_simulation(
 
     epf_monthly_rate = epf_interest_rate / 12.0
     mf_monthly_return = (1.0 + mf_return) ** (1.0 / 12.0) - 1.0
+    nps_monthly_return = (1.0 + nps_return) ** (1.0 / 12.0) - 1.0
 
     initial_prepayment = min(max(0.0, extra_initial_prepayment), loan)
     loan -= initial_prepayment
@@ -256,11 +260,13 @@ def run_pfos_simulation(
             current_fy = this_fy
             fy_ltcg_used = 0.0
 
+        # Compounding core assets
         hike_cycles = max(0, (month_number - 1) // 12)
         current_epf_inflow = epf_monthly_inflow * ((1.0 + epf_hike_pct) ** hike_cycles)
 
         epf = epf * (1.0 + epf_monthly_rate) + current_epf_inflow
-
+        nps = nps * (1.0 + nps_monthly_return)  # No new inflows, pure compounding
+        
         grow_mf_lots(mf_lots, mf_monthly_return)
 
         if current_date <= date(2029, 7, 31):
@@ -342,10 +348,11 @@ def run_pfos_simulation(
                 "Loan": loan,
                 "EPF": epf,
                 "MF": mf_value,
+                "NPS": nps,
                 "MF Cost": mf_cost,
                 "MF Gain": mf_gain,
-                "Net Worth": mf_value + epf - loan,
-                "Total Assets": mf_value + epf,
+                "Net Worth": mf_value + epf + nps - loan,
+                "Total Assets": mf_value + epf + nps,
                 "Hybrid Event": is_harvest_date or bonus_paid > 0
             }
         )
@@ -378,6 +385,12 @@ with st.sidebar:
     opening_mf = st.number_input("MF Corpus Already Invested (₹)", min_value=0, value=0, step=10000)
 
     st.divider()
+    st.header("🇮🇳 NPS Engine (75E/25C)")
+    nps_start = st.number_input("Opening NPS Balance (₹)", min_value=0, value=0, step=10000)
+    nps_return_pct = st.number_input("Planning NPS CAGR (%)", min_value=-50.0, max_value=100.0, value=11.0, step=0.5)
+    nps_return = nps_return_pct / 100.0
+
+    st.divider()
     st.header("🧾 Tax Engine")
     ltcg_limit = st.number_input("Annual LTCG Planning Allowance (₹)", min_value=0, value=125000, step=5000)
 
@@ -393,7 +406,6 @@ with st.sidebar:
     st.divider()
     st.header("📅 Hybrid Harvest")
     first_mf_harvest_date = st.date_input("First MF/EPF Harvest", value=date(2027, 3, 30))
-    # SET TO 6 MONTHS AS DEFAULT (index=1)
     harvest_interval = st.selectbox("Harvest Frequency", options=[3, 6, 12], index=1, format_func=lambda x: f"Every {x} months")
 
     st.divider()
@@ -427,6 +439,8 @@ df_base, debt_free_base = run_pfos_simulation(
     epf_hike_pct=epf_hike_pct,
     epf_interest_rate=epf_interest_rate,
     epf_harvest_pct=epf_harvest_pct,
+    nps_start=nps_start,
+    nps_return=nps_return,
     ltcg_limit=ltcg_limit,
     first_mf_harvest_date=first_mf_harvest_date,
     mf_harvest_interval_months=harvest_interval,
@@ -445,6 +459,7 @@ target_row = target_rows.iloc[0] if not target_rows.empty else df_base.iloc[-1]
 target_loan = float(target_row["Loan"])
 target_mf = float(target_row["MF"])
 target_epf = float(target_row["EPF"])
+target_nps = float(target_row["NPS"])
 target_net_worth = float(target_row["Net Worth"])
 
 
@@ -464,25 +479,21 @@ else:
 st.subheader("📊 PFOS Dashboard")
 c1, c2 = st.columns(2)
 c1.metric("Current Loan", money(loan_start))
-c2.metric("Current Rate", f"{loan_rate_pct:.2f}%")
+c2.metric("Target Loan", money(target_loan))
 
 c3, c4 = st.columns(2)
-c3.metric("Target Loan", money(target_loan))
-c4.metric("Target Date", fmt_date(target_date))
-
-c5, c6 = st.columns(2)
-c5.metric("Target MF", money(target_mf))
-c6.metric("Target EPF", money(target_epf))
+c3.metric("Target Date", fmt_date(target_date))
+c4.metric("Target Net Worth", money(target_net_worth))
 
 # ============================================================
-# ASSET VS DEBT CHART (RESTORED)
+# ASSET VS DEBT CHART 
 # ============================================================
 
 st.divider()
 st.subheader("🔥 Asset vs Debt Burn")
 
 chart_data = df_base.set_index("Date")[
-    ["Loan", "MF", "EPF"]
+    ["Loan", "MF", "EPF", "NPS"]
 ]
 
 st.line_chart(
@@ -490,17 +501,30 @@ st.line_chart(
     height=280
 )
 
+# ============================================================
+# EXECUTION SCHEDULE 
+# ============================================================
+
 st.divider()
-st.subheader("🗓️ Execution Schedule")
+st.subheader("🗓️ Execution Schedule & Wealth Building")
 
 event_rows = df_base[
     df_base["Hybrid Event"] | (df_base["MF Harvest"] > 0) | (df_base["EPF Harvest"] > 0) | (df_base["Bonus"] > 0)
 ].copy()
 
 if not event_rows.empty:
-    event_display = event_rows[["Calendar Date", "Month", "Rate", "Loan", "Bonus", "MF Harvest", "EPF Harvest"]].copy()
-    event_display.columns = ["Date", "M", "Rate", "Loan Left", "Bonus", "MF Sale", "EPF Harvest"]
-    st.dataframe(event_display.style.format({"Rate": "{:.2%}", "Loan Left": "₹{:,.0f}", "Bonus": "₹{:,.0f}", "MF Sale": "₹{:,.0f}", "EPF Harvest": "₹{:,.0f}"}), use_container_width=True, hide_index=True)
+    event_display = event_rows[["Calendar Date", "Month", "Loan", "EPF", "MF", "NPS", "Net Worth", "Bonus", "MF Harvest", "EPF Harvest"]].copy()
+    event_display.columns = ["Date", "M", "Loan", "EPF Bal", "MF Bal", "NPS Bal", "Net Worth", "Bonus", "MF Sale", "EPF Harv"]
+    st.dataframe(event_display.style.format({
+        "Loan": "₹{:,.0f}", 
+        "EPF Bal": "₹{:,.0f}", 
+        "MF Bal": "₹{:,.0f}", 
+        "NPS Bal": "₹{:,.0f}",
+        "Net Worth": "₹{:,.0f}", 
+        "Bonus": "₹{:,.0f}", 
+        "MF Sale": "₹{:,.0f}", 
+        "EPF Harv": "₹{:,.0f}"
+    }), use_container_width=True, hide_index=True)
 else:
     st.info("No hybrid events present.")
 
